@@ -61,20 +61,14 @@ tokenize = function(text_ds){
   
   # Remove all negative stop words, stemming words
   unigrams = unigrams |>
-    filter(!word %in% negatives) |>
+    filter(word %in% negatives == FALSE) |>
     mutate(stemmed.word = wordStem(word))
   
   return(unigrams)
 }
 
-## Joining the sentiment scores from Dodd's study. If there is no score, set it as a neutral score
-unigrams = unigrams |>
-  left_join(dodds, by = c("word" = "original.word")) |>
-  mutate(score = ifelse(is.na(score), 5, score))
-
-
-rolling_means = function(unigrams, window, title, color){
-  means = as.data.frame(rollmean(unigrams$score, window))
+rolling_means = function(unigrams, window, color){
+  means = as.data.frame(rollmean(unigrams$dodds.score, window))
   avg.ID = (1:nrow(means) / nrow(means) ) * 100
   
   means = cbind(avg.ID, means) 
@@ -83,9 +77,9 @@ rolling_means = function(unigrams, window, title, color){
   return(means |>
            ggplot(aes(x=avg.ID, y=means)) + 
            geom_line(color = color) + 
-           labs(x="Percentage of book", y="Rolling average of sentiment scores") + 
-           ggtitle(title))
-  
+           labs(x="Percentage of book", y="Rolling average of sentiment scores") +
+           scale_y_continuous(breaks=seq(5.30, 5.60, 0.05))) 
+           
 }
 
 
@@ -128,7 +122,7 @@ colnames(dodds.french) = c("original.word", "score")
 
 
 
-8################# 1. LITTLE WOMEN - DATASET MANIPULATION #################
+################# 1. LITTLE WOMEN - DATASET MANIPULATION #################
 
 Little.Women = gutenberg_download(514, mirror=my_mirror)
 
@@ -156,9 +150,137 @@ Little.Women = Little.Women |>
 
 Little.Women.unigram = tokenize(Little.Women)
 
+## Joining the sentiment scores from Dodd's study. If there is no score, set it as a neutral score
+Little.Women.unigram = Little.Women.unigram |>
+  left_join(dodds, by = c("word" = "original.word")) |>
+  rename(dodds.score = score) |>
+  mutate(dodds.score = ifelse(is.na(dodds.score) | word == 'march', 5, dodds.score)) 
+
+# If the word had a negative instance - the score is adjusted
+Little.Women.unigram = Little.Women.unigram |>
+  mutate(dodds.score = ifelse(negative.flag == 1, 5 - (dodds.score-5), dodds.score))
+
+
+# Used for word frequencies
+Little.Women.counts = Little.Women.unigram |>
+  count(stemmed.word) |>
+  arrange(desc(n))
 
 
 
+########## 2. MONTE CRISTO - DATASET MANIPULATION #######
+
+Monte.Cristo = gutenberg_download(1184, mirror=my_mirror)
+
+# Extracting the chapters into a new column
+Monte.Cristo = Monte.Cristo |>
+  filter(text != "") |>
+  mutate(chapter.empty = ifelse(grepl("Chapter [0-9]+", text), text, ""))
+
+# Removing the table of contents
+Monte.Cristo <- Monte.Cristo[-c(1:129), ] # Removing the table of contents
+
+# Creating a character variable chapter column
+Monte.Cristo = data.table(Monte.Cristo)
+Monte.Cristo[!nzchar(chapter.empty),chapter.empty:=NA][,chapter.word:=na.locf(chapter.empty)]
+
+# Turning the chapter variable into numeric
+Monte.Cristo[, chapter:=rleid(chapter.word)]
+
+# Removing the rows with CHAPTER __ in text. Also removing flagged chapter column
+Monte.Cristo = Monte.Cristo |>
+  filter(grepl("Chapter [0-9]+", text) == FALSE) |>
+  select(chapter, text)
+
+Monte.Cristo.unigram = tokenize(Monte.Cristo)
+
+## Joining the sentiment scores from Dodd's study. If there is no score, set it as a neutral score
+Monte.Cristo.unigram = Monte.Cristo.unigram |>
+  left_join(dodds, by = c("word" = "original.word")) |>
+  rename(dodds.score = score) |>
+  mutate(dodds.score = ifelse(is.na(dodds.score), 5, dodds.score))
+
+# If the word had a negative instance - the score is adjusted
+Monte.Cristo.unigram = Monte.Cristo.unigram |>
+  mutate(dodds.score = ifelse(negative.flag == 1, 5 - (dodds.score-5), dodds.score))
+
+# Used for word frequencies
+Monte.Cristo.counts = Monte.Cristo.unigram |>
+  count(stemmed.word) |>
+  arrange(desc(n))
+
+########## 3. FRANKENSTEIN - DATASET MANIPULATION #############
+
+Frank = gutenberg_download(84, mirror = my_mirror)
+
+# Extracting the chapters into a new column
+contents = c("Chapter [0-9]+", "Letter [0-9]+")
+
+Frank = Frank |>
+  filter(text != "") |>
+  mutate(chapter.empty = ifelse(grepl(paste(contents, collapse="|"), text), text, ""))
+
+# Create chapter column
+Frank <- Frank[-c(1:32), ] # Removing the table of contents
+
+Frank = data.table(Frank)
+Frank[!nzchar(chapter.empty),chapter.empty:=NA][,chapter.word:=na.locf(chapter.empty)]
+
+# Turning the chapter variable into numeric
+Frank[, chapter:=rleid(chapter.word)]
+
+# Removing the rows with CHAPTER __ in text. Also removing flagged chapter column
+Frank = Frank |>
+  filter(grepl(paste(contents, collapse="|"), text) == FALSE) |>
+  select(chapter, text)
+
+Frank.unigram = tokenize(Frank)
+
+## Joining the sentiment scores from Dodd's study. If there is no score, set it as a neutral score
+Frank.unigram = Frank.unigram |>
+  left_join(dodds, by = c("word" = "original.word")) |>
+  rename(dodds.score = score) |>
+  mutate(dodds.score = ifelse(is.na(dodds.score), 5, dodds.score))
+
+# If the word had a negative instance - the score is adjusted
+Frank.unigram = Frank.unigram |>
+  mutate(dodds.score = ifelse(negative.flag == 1, 5 - (dodds.score-5), dodds.score))
+
+# Used for word frequencies
+Frank.counts = Frank.unigram |>
+  count(stemmed.word) |>
+  arrange(desc(n))
+
+
+
+############# 4. GENERAL EXPLORATION #########
+
+# 25 Most Common words
+barplot(Little.Women.counts$n[1:25], las = 2, names.arg = Little.Women.counts$stemmed.word[1:25], 
+        col = "lavender", ylab = "Word frequencies")
+
+barplot(Monte.Cristo.counts$n[1:25], las = 2, names.arg = Monte.Cristo.counts$stemmed.word[1:25], 
+        col = "lightblue", ylab = "Word frequencies")
+
+barplot(Frank.counts$n[1:25], las = 2, names.arg = Frank.counts$stemmed.word[1:25], 
+        col = "lightgreen", ylab = "Word frequencies")
+
+
+
+############# 5. ROLLING MEANS ###########
+
+rolling_means(Little.Women.unigram, 10000, color="purple")
+rolling_means(Monte.Cristo.unigram, 10000, color="blue")
+rolling_means(Frank.unigram, 5000, color="darkgreen")
+
+## Only including words with scores more than / equal to 7 or less than / equal to 3
+temp.1 = Little.Women.unigram |> filter(dodds.score >=7 | dodds.score <= 3)
+temp.2 = Monte.Cristo.unigram |> filter(dodds.score >=7 | dodds.score <= 3)
+temp.3 = Frank.unigram |> filter(dodds.score >=7 | dodds.score <= 3)
+
+rolling_means(temp.1, 10000, color="purple")
+rolling_means(temp.2, 1000, color="blue")
+rolling_means(temp.3, 1000, color="darkgreen")
 
 
 
