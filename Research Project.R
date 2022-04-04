@@ -84,6 +84,17 @@ rolling_means = function(unigrams, window, color){
            
 }
 
+## Creation of the stability boxplots-by-chapters
+# Assumes the data is of type matrix and chapters are the columns
+stability.boxplots<-function(matrix) # Takes in a matrix (#rows iterations, #cols chapters/parts)
+{
+  ncol<-ncol(matrix)
+  chapter_vector<-sort(rep(1:ncol,nrow(matrix)),decreasing = F)
+  desired_form<-as.data.frame(cbind(c(matrix),chapter_vector))
+  colnames(desired_form)<-c("Estimate.Distribution","Chapter")
+  desired_form$Chapter<-as.factor(desired_form$Chapter) # v important!
+  return(desired_form) # make sure to have a catch variable
+}
 
 
 ############## PREPARE THE SENTIMENT WORDBANKS #################
@@ -295,7 +306,7 @@ Little.Women.counts = Little.Women.unigram |>
   count(word) |>
   arrange(desc(n))
 
-Little.Women.counts |> head(10) |>
+LW.common = Little.Women.counts |> head(10) |>
   ggplot(aes(reorder(word,-n), y=n)) +
   geom_bar(stat='identity', fill='lavender', color='black') + xlab('Frequency') + ylab('Word') +
   theme(axis.text.x = element_text(angle = 270)) 
@@ -305,7 +316,7 @@ Monte.Cristo.counts = Monte.Cristo.unigram |>
   count(word) |>
   arrange(desc(n))
 
-Monte.Cristo.counts |> head(10) |>
+MC.common = Monte.Cristo.counts |> head(10) |>
   ggplot(aes(reorder(word,-n), y=n)) +
   geom_bar(stat='identity', fill='lightblue', color='black') + xlab('Frequency') + ylab('Word') +
   theme(axis.text.x = element_text(angle = 270)) 
@@ -315,10 +326,13 @@ Frank.counts = Frank.unigram |>
   count(word) |>
   arrange(desc(n))
 
-Frank.counts |> head(10) |>
+Frank.common = Frank.counts |> head(10) |>
   ggplot(aes(reorder(word,-n), y=n)) +
   geom_bar(stat='identity', fill='lightgreen', color='black') + xlab('Frequency') + ylab('Word') +
   theme(axis.text.x = element_text(angle = 270)) 
+
+grid.arrange(LW.common, MC.common, Frank.common,
+             ncol=2, nrow = 2)
 
 
 ########## 4.2. NRC Positive and Negative ##########
@@ -338,7 +352,7 @@ Monte.Cristo.bin = Monte.Cristo.counts |>
 wordcloud(Monte.Cristo.bin$word, Monte.Cristo.bin$n, colors=c("firebrick1", "deepskyblue3")[factor(Monte.Cristo.bin$sentiment)], ordered.colors=TRUE, max.words=70)
 
 # Frankenstein
-Frank.bin = Frank.bin |>
+Frank.bin = Frank.counts |>
   inner_join(nrc.bin , "word")
 
 wordcloud(Frank.bin$word, Frank.bin$n, colors=c("firebrick1", "chartreuse3")[factor(Frank.bin$sentiment)], ordered.colors=TRUE, max.words=70)
@@ -387,6 +401,7 @@ Frank.emo |>
 
 ############# 5. SCORE AVERAGE BY CHAPTER ###########
 
+## Figure 4
 LW.chapter.avg = Little.Women.unigram |>
   filter(dodds.score != 5) |>
   group_by(chapter) |>
@@ -398,17 +413,6 @@ LW.chapter.avg |>
   geom_line(col='purple') +
   geom_vline(xintercept=24, linetype='dashed') +
   xlab("Chapter (Separated by Parts I and II)") + ylab("Average sentiment score")
-
-Frank.chapter.avg = Frank.unigram |>
-  filter(dodds.score != 5) |>
-  group_by(chapter) |>
-  summarise(average = mean(dodds.score)) |>
-  ungroup()
-
-Frank.chapter.avg |>
-  ggplot(aes(x=chapter, y=average)) +
-  geom_line(col='darkgreen') +
-  xlab("Chapter") + ylab("Average sentiment score")
 
 MC.chapter.avg = Monte.Cristo.unigram |>
   filter(dodds.score != 5) |>
@@ -422,7 +426,19 @@ MC.chapter.avg |>
   geom_line(col='blue') +
   xlab("Chapter (Separated by points of change in trend)") + ylab("Average sentiment score")
 
-########### 7. DIFFERENCE IN WORD APPEARANCE #######
+Frank.chapter.avg = Frank.unigram |>
+  filter(dodds.score != 5) |>
+  group_by(chapter) |>
+  summarise(average = mean(dodds.score)) |>
+  ungroup()
+
+Frank.chapter.avg |>
+  ggplot(aes(x=chapter, y=average)) +
+  geom_line(col='darkgreen') +
+  xlab("Chapter") + ylab("Average sentiment score") +
+  geom_vline(xintercept = 16, linetype='dashed')
+
+########### 6. DIFFERENCE IN WORD APPEARANCE #######
 
 # LITTLE WOMEN 
 
@@ -472,10 +488,13 @@ LW.diff$word = factor(LW.diff$word,
 LW.diff = LW.diff |>
   mutate(Sentiment.Score = as.factor(ifelse(score > 5, "Positive", "Negative")))
 
+# Figure 5
 LW.diff |>
   ggplot(aes(x=word, y = delta, fill=Sentiment.Score)) +
-    geom_bar(stat='identity') + 
-    xlab("Word") + ylab("Delta")
+  geom_bar(stat='identity', color='black') + 
+  xlab("Word") + ylab("Percentage change in sentiment score associated by word") +
+  scale_fill_manual(values = c('firebrick1', 'lavender')) +
+  geom_hline(yintercept=0)
 
 
 
@@ -520,6 +539,7 @@ MC.counts.byparts = MC.counts.byparts |>
   mutate(prop.3 = n.3 / as.numeric(MC.total.parts[3,2])) |>
   mutate(prop.4 = n.4 / as.numeric(MC.total.parts[4,2]))
 
+## Between Parts 1 and 2
 MC.diff.1.2 = MC.counts.byparts |>
   mutate(delta = ((prop.1 - prop.2)*(score - as.numeric(MC.total.parts[2,3]))) / (as.numeric(MC.total.parts[2,3]) - as.numeric(MC.total.parts[1,3]))) |>
   mutate(diff.freq = n.2 - n.1) |>
@@ -531,59 +551,129 @@ MC.diff.1.2$word = factor(MC.diff.1.2$word,
                       levels = MC.diff.1.2$word)
 
 MC.diff.1.2 = MC.diff.1.2 |>
-  mutate(Change = as.factor(ifelse(score > 5 & diff.freq > 0 | score < 5 & diff.freq < 0, "Positive", "Negative")))
+  mutate(Sentiment.Score = as.factor(ifelse(score > 5, "Positive", 
+                                   ifelse(score < 5, "Negative", NA))))
 
-MC.diff.1.2 |>
-  ggplot(aes(x=word, y = diff.freq, fill=Change)) +
-  geom_bar(stat='identity') + 
-  xlab("Word") + ylab("Change in frequency") +
-  ggtitle("Chapters 15-47 vs. Chapters 1-15")
+MC.diff.1.2.plot = MC.diff.1.2 |>
+  ggplot(aes(x=word, y = delta, fill=Sentiment.Score)) +
+  geom_bar(stat='identity', color='black') + 
+  xlab("Word") + ylab("% change in sentiment score by word") +
+  ggtitle("Portion 1 vs. Portion 2") +
+  scale_fill_manual(values = c('firebrick1', 'lightblue')) +
+  geom_hline(yintercept=0)
+
+## Between Parts 2 and 3
 
 MC.diff.2.3 = MC.counts.byparts |>
   mutate(delta = ((prop.2 - prop.3)*(score - as.numeric(MC.total.parts[3,3]))) / (as.numeric(MC.total.parts[3,3]) - as.numeric(MC.total.parts[2,3]))) |>
   mutate(diff.freq = n.3 - n.2) |>
   select(word, score, n.2, n.3, delta, diff.freq) |>
   arrange(desc(abs(delta))) |>
-  head(10)
+  head(5)
 
 MC.diff.2.3$word = factor(MC.diff.2.3$word, 
                           levels = MC.diff.2.3$word)
 
 MC.diff.2.3 = MC.diff.2.3 |>
-  mutate(Change = as.factor(ifelse(score > 5 & diff.freq > 0 | score < 5 & diff.freq < 0, "Positive", "Negative")))
+  mutate(Sentiment.Score = as.factor(ifelse(score > 5, "Positive", 
+                                   ifelse(score < 5, "Negative", NA))))
 
-MC.diff.2.3 |>
-  ggplot(aes(x=word, y = diff.freq, fill=Change)) +
-  geom_bar(stat='identity') + 
-  xlab("Word") + ylab("Change in frequency") +
-  ggtitle("Chapters 48-80 vs. Chapters 15-47")
+MC.diff.2.3.plot = MC.diff.2.3 |>
+  ggplot(aes(x=word, y = delta, fill=Sentiment.Score)) +
+  geom_bar(stat='identity', color='black') + 
+  xlab("Word") + ylab("% change in sentiment score by word") +
+  ggtitle("Portion 2 vs. Portion 3") +
+  scale_fill_manual(values = c('lightblue', 'firebrick1')) +
+  geom_hline(yintercept=0)
+
+## Between Parts 3 and 4
 
 MC.diff.3.4 = MC.counts.byparts |>
   mutate(delta = ((prop.3 - prop.4)*(score - as.numeric(MC.total.parts[4,3]))) / (as.numeric(MC.total.parts[4,3]) - as.numeric(MC.total.parts[3,3]))) |>
   mutate(diff.freq = n.4 - n.3) |>
   select(word, score, n.3, n.4, delta, diff.freq) |>
   arrange(desc(abs(delta))) |>
-  head(10)
+  head(5)
 
 MC.diff.3.4$word = factor(MC.diff.3.4$word, 
                           levels = MC.diff.3.4$word)
 
 MC.diff.3.4 = MC.diff.3.4 |>
-  mutate(Change = as.factor(ifelse(score > 5 & diff.freq > 0 | score < 5 & diff.freq < 0, "Positive", "Negative")))
+  mutate(Sentiment.Score = as.factor(ifelse(score > 5, "Positive", 
+                                   ifelse(score < 5, "Negative", NA))))
 
-MC.diff.3.4 |>
-  ggplot(aes(x=word, y = diff.freq, fill=Change)) +
-  geom_bar(stat='identity') + 
-  xlab("Word") + ylab("Change in frequency") +
-  ggtitle("Chapters 81-117 vs. Chapters 48-80")
+MC.diff.3.4.plot = MC.diff.3.4 |>
+  ggplot(aes(x=word, y = delta, fill=Sentiment.Score)) +
+  geom_bar(stat='identity', color='black') + 
+  xlab("Word") + ylab("% change in sentiment score by word") +
+  ggtitle("Portion 3 vs. Portion 4") +
+  scale_fill_manual(values = c('firebrick1', 'lightblue')) +
+  geom_hline(yintercept=0)
+
+grid.arrange(MC.diff.1.2.plot, MC.diff.2.3.plot, MC.diff.3.4.plot
+             , ncol=2, nrow = 2)
 
 
 
+# FRANKENSTEIN
 
+# Word frequencies grouped by each portion of the book
+Frank.unigram = Frank.unigram |>
+  mutate(part.to.analyse = ifelse(chapter < 15, 1, 
+                                  ifelse(chapter >= 15, 2, 0)))
 
+Frank.counts.byparts = Frank.unigram |>
+  group_by(part.to.analyse) |>
+  count(word) |>
+  arrange(part.to.analyse, desc(n)) |>
+  ungroup()
 
-########## 8. STABILITY ##########
+# Dataset with grouped by part - overall total number of terms and average score
+Frank.total.parts = Frank.counts.byparts |>
+  left_join(dodds, by=c('word' = 'original.word')) |>
+  mutate(score = ifelse(is.na(score), 5, score)) |> 
+  group_by(part.to.analyse) |>
+  summarise(total.terms = sum(n), average = mean(score)) |>
+  ungroup()
 
+# Word frequencies 
+Frank.counts.byparts = Frank.counts.byparts |>
+  filter(part.to.analyse == 1) |>
+  full_join(Frank.counts.byparts[Frank.counts.byparts$part.to.analyse==2, 2:3], by='word') |>
+  left_join(dodds, by=c('word' = 'original.word')) |>
+  mutate(score = ifelse(is.na(score), 5, score)) |>
+  select(word, score, n.x, n.y)
+
+Frank.counts.byparts[is.na(Frank.counts.byparts)] <- 0
+colnames(Frank.counts.byparts) = c("word", "score", "n.1", "n.2")
+
+Frank.counts.byparts = Frank.counts.byparts |>
+  mutate(prop.1 = n.1 / as.numeric(LW.total.parts[1,2])) |>
+  mutate(prop.2 = n.2 / as.numeric(LW.total.parts[2,2]))
+
+Frank.diff = Frank.counts.byparts |>
+  mutate(delta = ((prop.1 - prop.2)*(score - as.numeric(Frank.counts.byparts[2,3]))) / (as.numeric(Frank.counts.byparts[2,3]) - as.numeric(Frank.counts.byparts[1,3]))) |>
+  mutate(diff.freq = n.2 - n.1) |>
+  select(word, score, n.1, n.2, delta, diff.freq) |>
+  arrange(desc(abs(delta))) |>
+  filter(score != 5) |>
+  head(10)
+
+Frank.diff$word = factor(Frank.diff$word, 
+                      levels = Frank.diff$word)
+
+Frank.diff = Frank.diff |>
+  mutate(Sentiment.Score = as.factor(ifelse(score > 5, "Positive", "Negative")))
+
+# Figure 9
+Frank.diff |>
+  ggplot(aes(x=word, y = delta, fill=Sentiment.Score)) +
+  geom_bar(stat='identity', color='black') + 
+  xlab("Word") + ylab("Percentage change in sentiment score by word") +
+  scale_fill_manual(values = c('firebrick1', 'lightgreen')) +
+  geom_hline(yintercept=0) 
+
+########## 7. STABILITY ##########
 
 n=nrow(dodds) * 0.8
 R=50
@@ -598,34 +688,38 @@ for (i in c(1:R)){
   
   stability.temp = Little.Women.unigram |>
     left_join(lexicon_star, by = c("word" = "original.word")) |>
-    mutate(score = ifelse(is.na(score) | score == 'march', 5, score)) |>
+    rename(bootstrap.score = score) |>
+    mutate(bootstrap.score = ifelse(is.na(bootstrap.score) | word == 'march', 5, bootstrap.score)) |>
     group_by(chapter) |>
-    summarise(mean = mean(score)) |>
+    summarise(mean = mean(bootstrap.score)) |>
     ungroup()
-  
-  
-  
-  LW.stability[i, ] = t(stability.temp$mean)
+
+  stability.temp$mean.diff = LW.chapter.avg$average - stability.temp$mean
+  LW.stability[i, ] = t(stability.temp$mean.diff)
   
   rm(index,lexicon_star, stability.temp)
 }
 
-# Assumes the data is of type matrix and chapters are the columns
-stability.boxplots<-function(matrix) # Takes in a matrix (#rows iterations, #cols chapters/parts)
-{
-  ncol<-ncol(matrix)
-  chapter_vector<-sort(rep(1:ncol,nrow(matrix)),decreasing = F)
-  desired_form<-as.data.frame(cbind(c(matrix),chapter_vector))
-  colnames(desired_form)<-c("Estimate.Distribution","Chapter")
-  desired_form$Chapter<-as.factor(desired_form$Chapter) # v important!
-  return(desired_form) # make sure to have a catch variable
-}
 
-catch<-stability.boxplots(as.matrix(LW.stability)) # test
+
+catch = stability.boxplots(as.matrix(LW.stability)) # test
 
 ggplot(catch, aes(x = Chapter, y = Estimate.Distribution)) +
-  geom_boxplot() # Plot the catch object, no need to fiddle with this too much!
+  geom_boxplot() +
+  ylab("Difference between true and bootstrap score") +
+  geom_hline(yintercept=0, linetype='dashed')
 
+
+
+## Figure 4
+temp = stability.temp |>
+  group_by(chapter, dodds.score, bootstrap.score) |>
+  count(word) |>
+  ungroup() |>
+  arrange(chapter, desc(n)) |>
+  mutate(sentiment = ifelse(dodds.score > 5, 'Positive', 
+                            ifelse(dodds.score < 5, 'Negative', NA))) |>
+  mutate(in.sample = ifelse(bootstrap.score == 5 & ))
 
 ### Monte Cristo
 MC.stability <- data.frame(matrix(nrow=R, ncol=max(Monte.Cristo.unigram$chapter)))
@@ -636,12 +730,14 @@ for (i in c(1:R)){
   
   stability.temp = Monte.Cristo.unigram |>
     left_join(lexicon_star, by = c("word" = "original.word")) |>
-    mutate(score = ifelse(is.na(score) | score == 'march', 5, score)) |>
+    mutate(score = ifelse(is.na(score) | word == 'de', 5, score)) |>
+    filter(score != 5) |>
     group_by(chapter) |>
     summarise(mean = mean(score)) |>
     ungroup()
-  
-  MC.stability[i, ] = t(stability.temp$mean)
+
+  stability.temp$mean.diff = MC.chapter.avg$average - stability.temp$mean
+  MC.stability[i, ] = t(stability.temp$mean.diff)
   
   rm(index,lexicon_star, stability.temp)
 }
@@ -649,7 +745,59 @@ for (i in c(1:R)){
 catch<-stability.boxplots(as.matrix(MC.stability)) # test
 
 ggplot(catch, aes(x = Chapter, y = Estimate.Distribution)) +
-  geom_boxplot() 
+  geom_boxplot() +
+  ylab("Difference between true and bootstrap score") +
+  geom_hline(yintercept=0, linetype='dashed')
+
+###  Frankenstein
+Frank.stability <- data.frame(matrix(nrow=R, ncol=max(Frank.unigram$chapter)))
+
+for (i in c(1:R)){
+  index = sample(nrow(dodds), n, replace = FALSE, prob = NULL)
+  lexicon_star = arrange(dodds[index,])
+  
+  stability.temp = Frank.unigram |>
+    left_join(lexicon_star, by = c("word" = "original.word")) |>
+    mutate(score = ifelse(is.na(score), 5, score)) |>
+    filter(score != 5) |>
+    group_by(chapter) |>
+    summarise(mean = mean(score)) |>
+    ungroup()
+
+  stability.temp$mean.diff = Frank.chapter.avg$average - stability.temp$mean
+  Frank.stability[i, ] = t(stability.temp$mean.diff)
+  
+  rm(index,lexicon_star, stability.temp)
+}
+
+catch<-stability.boxplots(as.matrix(Frank.stability)) # test
+
+ggplot(catch, aes(x = Chapter, y = Estimate.Distribution)) +
+  geom_boxplot() +
+  ylab("Difference between true and bootstrap score") +
+  geom_hline(yintercept=0, linetype='dashed')
+
+
+## Distribution of dodds scores
+
+dodds |>
+  ggplot(aes(score)) +
+  geom_histogram() + 
+  xlab('Score') + ylab('Frequency')
+
+index = sample(nrow(dodds), n, replace = FALSE, prob = NULL)
+lexicon_star = arrange(dodds[index,])
+
+lexicon_star |> ggplot() +
+  geom_histogram(aes(score))
+
+stability.temp = Monte.Cristo.unigram |>
+  left_join(lexicon_star, by = c("word" = "original.word")) |>
+  mutate(score = ifelse(is.na(score) | word == 'de', 5, score)) |>
+  filter(score != 5) |>
+  group_by(chapter) |>
+  summarise(mean = mean(score)) |>
+  ungroup()
 
 
 
@@ -728,5 +876,36 @@ ggplot(NULL, aes(x=chapter, y=average)) +
                      breaks=c('English', 'French'),
                      values=c('English'='#f04546', 'French'='#3591d1')) +
   xlab("Chapter (Separated by Parts I - V)") + ylab("Average sentiment score")
+
+# Time Series
+library(astsa)
+library(tseries)
+library(readxl) 
+
+
+dim(English.chapter.avg);dim(French.chapter.avg)
+ts<-cbind(English.chapter.avg[,2],French.chapter.avg[,2])
+ts.plot(ts)
+cor(ts[,1],ts[,2]) # Pretty strong linear corr
+cor(ts[,1],ts[,2],method='kendall') # Ranks are less good, might be a lot of ties in data
+# I would avoid taking the CI's since data is serially correlated, and this becomes challeging, it's doable, but reuqires a lot of theorey for an assignment, I wrote my undergrad thesis on this though, so we could apply it :-), but it takes a lot of coding
+
+
+adf.test(ts[,1]);adf.test(ts[,2]) # Close enough to stationary, we need at least one to be stationary p-val<0.10 or 0.05 for ccf to make sense
+acf2(test[,1]);acf2(test[,2]) # This is odd, acf/pacf shows no sign of chapter by chapter correlation 
+ccf(ts[,1],ts[,2], main='')# Showcases the ccf, shows the very strong correlation in sentiment at lag 0 (chapters correlate with eachother) weirdly there is a "significant" correlation at lag -1, this might be due to the non-stationarity of the data, anything within grhe blue line is insignificant
+
+
+plot(ts[,1],ts[,2],col='blue',pch=20, 
+     xlab="English text scores", ylab="French text scores")
+     plot(rank(ts[,1]),rank(ts[,2]),col='purple',pch=20,main="Ranks") # for tau
+
+plot(ts[-117,1],ts[-1,2],col='red',pch=20,main="Lag 1") # We can see a weak linear correlation at lag 1, (lagging by one chapter)
+
+# I like tau since it gets rid of some of the suggestive bias in the lexicon by only looking at the happiness ranks
+#, however, rho demonstrates that the lexicon is fairly consistent (along with the translation).
+
+# Interesting talking points, french seems to be a bit more negative, very strong linear correlation, ccf at lag -1
+# Would include in report: time series plot (you have a nicer one), ccf, plots (lines 47,48) and correlation measures
 
 
