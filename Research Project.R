@@ -1,3 +1,7 @@
+# Research Project - Text mining and Sentiment analysis
+# STAT 5703
+# By: Cristina Agatep and Patric Harrigan
+
 library(tidyr)
 library(dplyr)
 library(ggplot2) # plots
