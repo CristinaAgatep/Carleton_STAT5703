@@ -1,15 +1,14 @@
 ### STAT 5703 - FINAL PROJECT 
 # HEART DATASET
 
-# convert slp to factor
-
-
 suppressPackageStartupMessages(library(kmed))
 suppressPackageStartupMessages(library(VGAM))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(FactoMineR))
 suppressPackageStartupMessages(library(factoextra))
 suppressPackageStartupMessages(library(clustMixType))
+suppressPackageStartupMessages(library(ISLR))
+suppressPackageStartupMessages(library(randomForest))
 
 data = read.csv('/Users/cristinaagatep/Desktop/School/STAT5703/Assignments/Research Project/heart.csv',
                       header=TRUE)
@@ -41,7 +40,7 @@ data$output<-as.factor(data$output) # Convert the output to factor as well
 heart.famd = FAMD(data, sup.var = 14, ncp = 20, graph = FALSE)
 summary(heart.famd)
 heart.eig <- get_eigenvalue(heart.famd)
-head(heart.eig)
+head(heart.eig, 10)
 
 fviz_screeplot(heart.famd)
 
@@ -89,5 +88,34 @@ clust |>
   geom_point()
 
 
+
+######## FAMD supervised ########
+set.seed(100)
+test_indicies<-sample(c(1:296),ceiling(0.2*296),replace = F)
+
+famd.set = cbind(famd.coords[,1:7], data$output) |>
+  rename(output = `data$output` )
+
+test_set<-famd.set[test_indicies,]
+train_set<-famd.set[-test_indicies,]
+dim(test_set) # Should have 60 rows
+dim(train_set) # Should have 297-60 = 237 rows
+intersect(rownames(test_set),rownames(train_set)) # Should be empty
+
+
+
+model1<-glm(output ~ .,data = train_set,family = binomial)
+summary(model1)
+
+table(pred = predict(model1,type='response')>0.5,obs = train_set$output)
+
+
+
+set.seed(105)
+model6.1.famd = randomForest(output ~ ., data=train_set, importance=T)
+varImpPlot(model6.1.famd) ## FIGURE
+
+pred.mod6.1.famd<-predict(model6.1.famd,newdata=test_set,type="class")
+table(predictions = pred.mod6.1.famd,observed = test_set[,8])
 
 
