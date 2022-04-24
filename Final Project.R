@@ -1,6 +1,9 @@
 ### STAT 5703 - FINAL PROJECT 
 # HEART DATASET
 
+# orange = low risk of heart attack
+# blue = high risk of heart attack
+
 suppressPackageStartupMessages(library(kmed))
 suppressPackageStartupMessages(library(VGAM))
 suppressPackageStartupMessages(library(dplyr))
@@ -36,28 +39,32 @@ data$output<-as.factor(data$output) # Convert the output to factor as well
 
 
 ####### FAMD #######
+palette<-c("#D16103","#4E84C4") # Colour palette for consistency
 
-heart.famd = FAMD(data, sup.var = 14, ncp = 20, graph = FALSE)
+heart.famd = FAMD(data, sup.var = 14, ncp = 20, graph = FALSE) # Creates FAMD coordinates
 summary(heart.famd)
-heart.eig <- get_eigenvalue(heart.famd)
-head(heart.eig, 10)
+heart.eig <- get_eigenvalue(heart.famd) # Eigenvalues
+head(heart.eig, 10) ##### Patric: Check these and make sure they are the same as what is in my document
 
-fviz_screeplot(heart.famd)
+fviz_screeplot(heart.famd) ###### You can check these too
 
+#### I still can't figure out what the triangles are doing!!!! There are 16 of them. 
+# If I can't figure it out worst case scen I'll just plot it using ggplot and remove the triangles...
 fviz_famd_ind(heart.famd, label = "none", 
-              habillage = "output", palette = c("red", "blue"), # color by groups 
+              habillage = "output", palette = palette, # color by groups 
               repel = TRUE, alpha.ind = 0.5) + 
   theme(text = element_text(size=20), axis.text.x = element_text(size=20), axis.text.y = element_text(size=20))
 
-fviz(heart.famd, "var")
-fviz(heart.famd, "ind", habillage = 'output', label = 'none')
+
+fviz(heart.famd, "var") # Variable plot
+fviz(heart.famd, "ind", habillage = 'output', label = 'none', fill=palette) #Individuals plot
 
 
 ####### K-Prototype ######
 set.seed(123)
 heart.kproto = data |> select(-output)
 
-k = 10 # Number of clusters
+k = 10 # Max number of clusters to try
 kproto.wss = data.frame(matrix(data=NA, nrow = k, ncol=2))
 colnames(kproto.wss) = c('clusters', 'wss')
 
@@ -73,7 +80,7 @@ kproto.wss |>
   scale_x_continuous(breaks=1:k) +
   xlab('Number of Clusters') + ylab('Within Sum of Squares')
 
-
+# FAMD coordinates for each dimension
 famd.coords = data.frame(heart.famd$ind$coord)
 
 k = 3
@@ -83,9 +90,11 @@ clust = cbind(famd.coords[,1:2], data.frame(clust.temp$cluster), data$output)
 colnames(clust) = c('Dim.1', 'Dim.2', 'Cluster', 'output')
 clust$Cluster = factor(clust$Cluster)
 
+
 clust |>
   ggplot(aes(x=Dim.1, y=Dim.2, col=Cluster)) +
-  geom_point()
+  geom_point() +
+  scale_fill_manual(values = palette)
 
 
 
