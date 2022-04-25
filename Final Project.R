@@ -12,43 +12,18 @@ suppressPackageStartupMessages(library(factoextra))
 suppressPackageStartupMessages(library(clustMixType))
 suppressPackageStartupMessages(library(ISLR))
 suppressPackageStartupMessages(library(randomForest))
-library(rtkore)
-library(Rcpp)
+suppressPackageStartupMessages(library(rtkore))
+suppressPackageStartupMessages(library(Rcpp))
 # 297 observations
 # use kmed dataset
 
-data = read.csv('https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data',
-                header=FALSE)
-shirley=read.csv('/Users/cristinaagatep/Desktop/School/STAT5703/Assignments/Research Project/heart.csv', 
-                 header=TRUE)
-colnames(data) = c('age', 'sex', 'cp', 'trtbps', 'chol', 'fbs', 'restecg', 'thalachh', 'exng',
-                   'oldpeak', 'slp', 'caa', 'thall', 'output')
-summary(data) # Summarize to look for discrepancies
 
-# Note that caa has 5 values of '4' which don't correspond to anything in the metadata, we should get rid of these guys
-table(data$caa)
-# Same with 2 individuals with values of 0 under thall, we eliminate these individuals since this is meaningless, and we want to avoid imputation
-table(data$thall)
+data = heart
+data$class = as.factor(ifelse(data$class>0,1,0)) # Convert to binary problem then factor
+data$sex<-as.factor(as.numeric((data$sex)))
+data$fbs<-as.factor(as.numeric((data$fbs)))
+data$exang<-as.factor(as.numeric((data$exang)))
 
-data<-data[data$caa!=4,]
-data<-data[data$thall!=0,] # Get's rid of undesirable values
-
-data$cp<-as.factor(data$cp)
-data$restecg<-as.factor(data$restecg)
-data$slp<-as.factor(data$slp)
-data$thall<-as.factor(data$thall)
-
-# Convert the binary factors as well
-data$sex<-as.factor(data$sex)
-data$fbs<-as.factor(data$fbs)
-data$exng<-as.factor(data$exng)
-data$output<-as.factor(data$output) # Convert the output to factor as well
-
-data1<-subset(data,output %in% c(1, 2, 3, 4))
-data2<-subset(data,output!=1)
-
-hist(data1$age,main = "Diagnosed Heart Disease",xlab = "Age",breaks = 20)
-hist(data2$age,main ="No Presence of Heart Disease",xlab = "Age",breaks = 20)
 
 ####### FAMD #######
 palette<-c("#D16103","#4E84C4") # Colour palette for consistency
@@ -63,13 +38,13 @@ fviz_screeplot(heart.famd) ###### You can check these too
 #### I still can't figure out what the triangles are doing!!!! There are 16 of them. 
 # If I can't figure it out worst case scen I'll just plot it using ggplot and remove the triangles...
 fviz_famd_ind(heart.famd, label = "none", 
-              habillage = "output", palette = palette, # color by groups 
+              habillage = "class", palette = palette, # color by groups 
               repel = TRUE, alpha.ind = 0.5) + 
   theme(text = element_text(size=20), axis.text.x = element_text(size=20), axis.text.y = element_text(size=20))
 
 
 fviz(heart.famd, "var") # Variable plot
-fviz(heart.famd, "ind", habillage = 'output', label = 'none', fill=palette) #Individuals plot
+fviz(heart.famd, "ind", habillage = 'class', label = 'none') #Individuals plot
 
 # individual coordinates for dimensions
 famd.coords = data.frame(heart.famd$ind$coord)
@@ -77,7 +52,7 @@ famd.coords = data.frame(heart.famd$ind$coord)
 
 ####### K-Prototype ######
 set.seed(123)
-heart.kproto = data |> select(-output)
+heart.kproto = data |> select(-class)
 
 k = 10 # Max number of clusters to try
 kproto.wss = data.frame(matrix(data=NA, nrow = k, ncol=2))
