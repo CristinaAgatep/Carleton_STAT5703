@@ -12,10 +12,17 @@ suppressPackageStartupMessages(library(factoextra))
 suppressPackageStartupMessages(library(clustMixType))
 suppressPackageStartupMessages(library(ISLR))
 suppressPackageStartupMessages(library(randomForest))
+library(rtkore)
+library(Rcpp)
+# 297 observations
+# use kmed dataset
 
-data = read.csv('/Users/cristinaagatep/Desktop/School/STAT5703/Assignments/Research Project/heart.csv',
-                      header=TRUE)
-
+data = read.csv('https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data',
+                header=FALSE)
+shirley=read.csv('/Users/cristinaagatep/Desktop/School/STAT5703/Assignments/Research Project/heart.csv', 
+                 header=TRUE)
+colnames(data) = c('age', 'sex', 'cp', 'trtbps', 'chol', 'fbs', 'restecg', 'thalachh', 'exng',
+                   'oldpeak', 'slp', 'caa', 'thall', 'output')
 summary(data) # Summarize to look for discrepancies
 
 # Note that caa has 5 values of '4' which don't correspond to anything in the metadata, we should get rid of these guys
@@ -37,6 +44,11 @@ data$fbs<-as.factor(data$fbs)
 data$exng<-as.factor(data$exng)
 data$output<-as.factor(data$output) # Convert the output to factor as well
 
+data1<-subset(data,output %in% c(1, 2, 3, 4))
+data2<-subset(data,output!=1)
+
+hist(data1$age,main = "Diagnosed Heart Disease",xlab = "Age",breaks = 20)
+hist(data2$age,main ="No Presence of Heart Disease",xlab = "Age",breaks = 20)
 
 ####### FAMD #######
 palette<-c("#D16103","#4E84C4") # Colour palette for consistency
@@ -58,6 +70,9 @@ fviz_famd_ind(heart.famd, label = "none",
 
 fviz(heart.famd, "var") # Variable plot
 fviz(heart.famd, "ind", habillage = 'output', label = 'none', fill=palette) #Individuals plot
+
+# individual coordinates for dimensions
+famd.coords = data.frame(heart.famd$ind$coord)
 
 
 ####### K-Prototype ######
