@@ -14,8 +14,6 @@ suppressPackageStartupMessages(library(ISLR))
 suppressPackageStartupMessages(library(randomForest))
 suppressPackageStartupMessages(library(rtkore))
 suppressPackageStartupMessages(library(Rcpp))
-# 297 observations
-# use kmed dataset
 
 
 data = heart
@@ -33,7 +31,7 @@ summary(heart.famd)
 heart.eig <- get_eigenvalue(heart.famd) # Eigenvalues
 head(heart.eig, 10) ##### Patric: Check these and make sure they are the same as what is in my document
 
-fviz_screeplot(heart.famd) ###### You can check these too
+fviz_screeplot(heart.famd, main='') ###### You can check these too
 
 #### I still can't figure out what the triangles are doing!!!! There are 16 of them. 
 # If I can't figure it out worst case scen I'll just plot it using ggplot and remove the triangles...
@@ -73,48 +71,26 @@ kproto.wss |>
 # FAMD coordinates for each dimension
 famd.coords = data.frame(heart.famd$ind$coord)
 
-k = 3
-clust.temp = kproto(heart.kproto, k)
+##### Plotting of clusters ####
 
-clust = cbind(famd.coords[,1:2], data.frame(clust.temp$cluster), data$output)
-colnames(clust) = c('Dim.1', 'Dim.2', 'Cluster', 'output')
-clust$Cluster = factor(clust$Cluster)
+num.clust = function(k){
+  clust.temp = kproto(heart.kproto, k)
+  
+  clust = cbind(famd.coords[,1:2], data.frame(clust.temp$cluster), data$class)
+  colnames(clust) = c('Dim.1', 'Dim.2', 'Cluster', 'output')
+  clust$Cluster = factor(clust$Cluster)
+  
+  clust.plot = clust |>
+    ggplot(aes(x=Dim.1, y=Dim.2, col=Cluster))  +
+    geom_vline(xintercept=0) +
+    geom_hline(yintercept=0) +
+    geom_point() +
+    scale_fill_manual(values = palette)
+  
+  return(clust.plot)
+}
 
+num.clust(2)
 
-clust |>
-  ggplot(aes(x=Dim.1, y=Dim.2, col=Cluster)) +
-  geom_point() +
-  scale_fill_manual(values = palette)
-
-
-
-######## FAMD supervised ########
-set.seed(100)
-test_indicies<-sample(c(1:296),ceiling(0.2*296),replace = F)
-
-famd.set = cbind(famd.coords[,1:7], data$output) |>
-  rename(output = `data$output` )
-
-test_set<-famd.set[test_indicies,]
-train_set<-famd.set[-test_indicies,]
-dim(test_set) # Should have 60 rows
-dim(train_set) # Should have 297-60 = 237 rows
-intersect(rownames(test_set),rownames(train_set)) # Should be empty
-
-
-
-model1<-glm(output ~ .,data = train_set,family = binomial)
-summary(model1)
-
-table(pred = predict(model1,type='response')>0.5,obs = train_set$output)
-
-
-
-set.seed(105)
-model6.1.famd = randomForest(output ~ ., data=train_set, importance=T)
-varImpPlot(model6.1.famd) ## FIGURE
-
-pred.mod6.1.famd<-predict(model6.1.famd,newdata=test_set,type="class")
-table(predictions = pred.mod6.1.famd,observed = test_set[,8])
 
 
