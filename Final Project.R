@@ -42,11 +42,19 @@ fviz_famd_ind(heart.famd, label = "none",
 
 
 fviz(heart.famd, "var") # Variable plot
-fviz(heart.famd, "ind", habillage = 'class', label = 'none') #Individuals plot
+fviz(heart.famd, "ind", habillage = 'class', label = 'none') +
+  scale_color_manual(values = palette) #Individuals plot
+
+
 
 # individual coordinates for dimensions
 famd.coords = data.frame(heart.famd$ind$coord)
 
+ggplot(aes(x=famd.coords$Dim.1, y=famd.coords$Dim.2, col=data$class))  +
+geom_vline(xintercept=0) +
+geom_hline(yintercept=0) +
+geom_point() +
+scale_color_manual(values = palette)
 
 ####### K-Prototype ######
 set.seed(123)
@@ -84,13 +92,14 @@ num.clust = function(k){
     ggplot(aes(x=Dim.1, y=Dim.2, col=Cluster))  +
     geom_vline(xintercept=0) +
     geom_hline(yintercept=0) +
-    geom_point() +
-    scale_fill_manual(values = palette)
+    geom_point() + 
+    ggtitle('8 Clusters')
   
   return(clust.plot)
 }
 
-num.clust(2)
+  num.clust(8)
+
 
 
 
